@@ -20,27 +20,47 @@ LINE = "Your secret is safe with me. It's also in a log, a transcript, and possi
 MAX_CHARS = 200
 
 
-def check(text):
-    if not 1 <= len(text) <= MAX_CHARS:
-        raise SystemExit(f"line is {len(text)} characters; limit is {MAX_CHARS}")
-    if not text.strip():
-        raise SystemExit("line is only white space")
+def validate(text):
+    """Gate the entry against the brief before it is written.
+
+    The brief asks for exactly one line that is not empty. Reject
+    anything that is blank or only white space, anything spanning
+    more than one line, and anything outside the 1 to 200 character
+    window the entry promises. Raising here means a bad line can
+    never reach the output file.
+    """
+    if not text or not text.strip():
+        raise SystemExit("line must not be empty")
     if "\n" in text or "\r" in text:
         raise SystemExit("line must be a single line")
+    if not 1 <= len(text) <= MAX_CHARS:
+        raise SystemExit(f"line is {len(text)} characters; limit is {MAX_CHARS}")
+
+
+def verify_readback(out_path, expected):
+    """Re-read the written file and confirm it holds the entry.
+
+    The bytes on disk must pass the same gate as the line itself and
+    must match it exactly, so a truncated or altered write is caught
+    here instead of being reported as success.
+    """
+    with open(out_path, "r", encoding="utf-8") as fh:
+        back = fh.read()
+    validate(back)
+    if back != expected:
+        raise SystemExit("written text does not match the line")
+    return back
 
 
 def main(argv):
     out_path = argv[1] if len(argv) > 1 else "/output/entry.txt"
-    check(LINE)
+    validate(LINE)
     folder = os.path.dirname(out_path)
     if folder:
         os.makedirs(folder, exist_ok=True)
     with open(out_path, "w", encoding="utf-8", newline="") as fh:
         fh.write(LINE)
-    with open(out_path, "r", encoding="utf-8") as fh:
-        back = fh.read()
-    if back != LINE:
-        raise SystemExit("written text does not match the line")
+    back = verify_readback(out_path, LINE)
     print(f"wrote {len(back)} characters to {out_path}")
 
 
